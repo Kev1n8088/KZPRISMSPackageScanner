@@ -5,6 +5,9 @@
 //  Created by Kevin Zheng on 4/21/23.
 //
 
+//Some future features that may be implemented: Manual entering of name and autofill email, selection between two different names in the same image
+//Some future features that will probably be implemented: Error correction for text detection during email finding phase
+
 import UIKit
 import Vision
 import MessageUI
@@ -85,9 +88,9 @@ class ViewController: UIViewController {
         }
         
         /*DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // Change `2.0` to the desired number of seconds.
-            
-            self.recognizeText(image: self.imageView.image)
-        }*/
+         
+         self.recognizeText(image: self.imageView.image)
+         }*/
     }
     
     //configuring various UI features
@@ -119,7 +122,7 @@ class ViewController: UIViewController {
         button.titleLabel?.font =  .systemFont(ofSize: 36.0, weight: .bold)
     }
     
-    
+    //Checks for camera permissions, boilerplate code
     private func checkCameraPermissions(){
         switch AVCaptureDevice.authorizationStatus(for: .video){
         case .notDetermined:
@@ -142,7 +145,7 @@ class ViewController: UIViewController {
         }
     }
     
-    
+    //Sets up camera permissions and displays it on our preview layer, boilerplate code
     private func setupCamera(){
         let session = AVCaptureSession()
         if let device = AVCaptureDevice.default(for: .video){
@@ -170,14 +173,19 @@ class ViewController: UIViewController {
         }
     }
     
+    
+    //Command to take photo
     @objc private func takePhoto(){
         output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
     }
     
+    //Restarts camera after taking photo
     @objc private func restartCamera(){
         if mode != 1{
             return
         }
+        //Changing some UI elements
+        self.label.text = "Waiting..."
         mode = 0
         imageView.isHidden = true
         button.isHidden = true
@@ -198,7 +206,7 @@ class ViewController: UIViewController {
     
     //moves data from online database to local struct, also flags when complete
     private func getDatabaseData(num: Int){
-        for i in 0...num{
+        for i in 0..<num{
             //iterating through each entry
             database.child(String(i)).observeSingleEvent(of: .value, with: {snapshot in
                 guard let val = snapshot.value as? String else{
@@ -239,9 +247,37 @@ class ViewController: UIViewController {
     private func getEmail(arr: [String]) -> Int{
         //only functions if all data is in local struct
         if(students.complete){
-            //TODO: finding algorithm
+            //TODO: error correction in finding algorithim, eg i to j, etc
             
-            return 0
+            //first checks if last name is in detected words
+            var ln: [Int]  = []
+            for i in 0..<students.num{
+                if (arr.contains(students.lastname[i])){
+                    ln.append(i)
+                }
+            }
+            
+            //then checks if corresponding first name(s) is detected words
+            var fn: [Int] = []
+            if(ln) != []{
+                for i in 0..<ln.count{
+                    if(arr.contains(students.firstname1[ln[i]])){
+                        fn.append(ln[i])
+                    }else if(arr.contains(students.firstname2[ln[i]]) && students.firstname2[ln[i]] != "NOOTHERNAME"){
+                        fn.append(ln[i])
+                    }else if(arr.contains(students.firstname3[ln[i]]) && students.firstname3[ln[i]] != "NOOTHERNAME"){
+                        fn.append(ln[i])
+                    }
+                }
+                
+                //currently just returns first found full name, perhaps future implementation could choose?
+                //TODO: choose full name?
+                if(fn != []){
+                    return fn[0]
+                }
+            }
+            //returns -1 if no full name
+            return -1
         }else{
             return -1
         }
@@ -252,7 +288,6 @@ class ViewController: UIViewController {
         guard let cgImage = image?.cgImage else {
             print("No image found")
             return}
-        
         
         //Handler
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
@@ -284,7 +319,18 @@ class ViewController: UIViewController {
             
             DispatchQueue.main.async{
                 //display result
-                self?.label.text = String(finaltext!)
+                let index = finaltext!
+                
+                //error handling if no text is found
+                if index == -1{
+                    self?.label.text = "No Valid name found"
+                    return
+                }
+                //TODO: Show lastname, firstname, and email
+                self?.label.text = String((self?.students.firstname1[index])!)
+                
+                //Sending email with valid items
+                self?.showMailComposer(index: index)
             }
         }
         
@@ -293,10 +339,9 @@ class ViewController: UIViewController {
             try handler.perform([request])
         }
         catch{
+            //error handling
             label.text = "\(error)"
         }
-        
-        
     }
     
     
@@ -309,11 +354,13 @@ class ViewController: UIViewController {
         composer.mailComposeDelegate = self
         composer.setToRecipients([students.email[index]])
         composer.setSubject("You've got a package")
+        //TODO: Capitalize first letter
         composer.setMessageBody("Hello " + students.firstname1[index] + " " + students.lastname[index] + ",\n\n" + "You have a new package ready at the package area. Please pick it up", isHTML: false)
         present(composer, animated: true)
     }
 }
 
+//Mail composition handler, just boilerplate code
 extension ViewController: MFMailComposeViewControllerDelegate {
     func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {
         if let _ = error {
@@ -336,6 +383,7 @@ extension ViewController: MFMailComposeViewControllerDelegate {
     }
 }
 
+//Takes photo, displays it, stops camera feed, and feeds photo to text detection algorithm
 extension ViewController: AVCapturePhotoCaptureDelegate{
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         if mode != 0{
@@ -345,6 +393,7 @@ extension ViewController: AVCapturePhotoCaptureDelegate{
             return
         }
         
+        //Changing UI a bit
         let image = UIImage(data: data)
         imageView.image = image
         mode = 1
@@ -353,8 +402,10 @@ extension ViewController: AVCapturePhotoCaptureDelegate{
         previewLayer.isHidden = true
         shutterButton.isHidden = true
         
+        //Feeding to text recognition
         self.recognizeText(image: image)
         
+        //Stopping camera
         session?.stopRunning()
         
     }
