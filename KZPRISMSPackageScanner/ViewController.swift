@@ -92,7 +92,7 @@ class ViewController: UIViewController {
         }
         
         
-        self.timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true, block: { _ in
+        self.timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { _ in
             self.takePhoto()
         })
         
@@ -172,8 +172,9 @@ class ViewController: UIViewController {
                 previewLayer.videoGravity = .resizeAspectFill
                 previewLayer.session = session
                 
-                //TODO: Run on background thread
-                session.startRunning()
+                DispatchQueue.global(qos: .background).async {
+                    session.startRunning()
+                }
                 self.session = session
                 
             }
@@ -189,7 +190,7 @@ class ViewController: UIViewController {
         output.capturePhoto(with: AVCapturePhotoSettings(), delegate: self)
     }
     
-    //Restarts camera after taking photo
+    //Restarts camera after taking photo, deprecated
     @objc private func restartCamera(){
         if mode != 1{
             return
@@ -201,11 +202,13 @@ class ViewController: UIViewController {
         button.isHidden = true
         previewLayer.isHidden = false
         shutterButton.isHidden = false
-        //TODO: Run on background thread
-        session?.startRunning()
+        DispatchQueue.global(qos: .background).async {
+            self.session?.startRunning()
+        }
         
     }
     
+    //resets queue
     @objc private func removeQueue(){
         sendQueue = []
         sendQueueNames = ""
@@ -341,9 +344,10 @@ class ViewController: UIViewController {
                     //self?.label.text = "No Valid name found"
                     return
                 }
-                //TODO: Show lastname, firstname, and email
+                
                 //self?.label.text = String(((self?.students.firstname1[index])!))
                 
+                //checks if name is already in queue, if not, adds to queue and vibrates
                 if(!(self?.sendQueue.contains(index))!){
                     self?.sendQueue.append(index)
                     self?.sendQueueNames += (self?.students.firstname1[index])! + " "
@@ -366,6 +370,7 @@ class ViewController: UIViewController {
         }
     }
     
+    //sends emails to all in queue
     @objc private func sendEmail(){
         showMailComposer(index: sendQueue)
     }
@@ -390,7 +395,6 @@ class ViewController: UIViewController {
         
         composer.setToRecipients(k)
         composer.setSubject("You've got a package")
-        //TODO: Capitalize first letter
         composer.setMessageBody("Hello, You have a new package ready at the package area. Please pick it up", isHTML: false)
         present(composer, animated: true)
     }
