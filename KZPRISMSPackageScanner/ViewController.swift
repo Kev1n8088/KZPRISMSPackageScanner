@@ -6,6 +6,7 @@
 //
 
 //Some future features that may be implemented: Manual entering of name and autofill email, selection between two different names in the same image
+//Some more future feature suggestions: cue to show what text is detected, clientside method of updating firstnames
 //Some future features that will probably be implemented: Error correction for text detection during email finding phase
 
 import UIKit
@@ -13,15 +14,17 @@ import Vision
 import MessageUI
 import AVFoundation
 import FirebaseDatabase
+import AudioToolbox
 
 class ViewController: UIViewController {
-    
     //accessing database
     private let database = Database.database().reference()
     private var session: AVCaptureSession?
     private let output = AVCapturePhotoOutput()
     private let previewLayer = AVCaptureVideoPreviewLayer()
     private var mode = 0
+    private var sendQueue : [Int] = []
+    private var sendQueueNames = ""
     
     private let shutterButton: UIButton = {
         let shutterButton = UIButton(frame: CGRect(x: 0, y:0, width: 80, height: 80))
@@ -67,6 +70,7 @@ class ViewController: UIViewController {
         var complete = false //only flips to true once all data is added to local
     }
     private var students = studentInfo() //instance of studentinfo
+    private var timer = Timer()
     
     override func viewDidLoad() {
         //when view loads
@@ -78,7 +82,7 @@ class ViewController: UIViewController {
         view.addSubview(button)
         
         imageView.isHidden = true
-        button.isHidden = true
+        //button.isHidden = true
         
         checkCameraPermissions()
         
@@ -86,6 +90,11 @@ class ViewController: UIViewController {
             //wait for database to load and get number of entries which are then used to get all data from database
             self.getDatabaseData(num: result)
         }
+        
+        
+        self.timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true, block: { _ in
+            self.takePhoto()
+        })
         
         /*DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // Change `2.0` to the desired number of seconds.
          
@@ -117,8 +126,9 @@ class ViewController: UIViewController {
             width: 40,
             height: 40)
         shutterButton.center = CGPoint(x: view.frame.size.width/2, y: view.frame.size.height - 80)
-        shutterButton.addTarget(self, action: #selector(takePhoto), for: .touchUpInside)
-        button.addTarget(self, action: #selector(restartCamera), for: .touchUpInside)
+        shutterButton.addTarget(self, action: #selector(sendEmail), for: .touchUpInside)
+        //button.addTarget(self, action: #selector(restartCamera), for: .touchUpInside)
+        button.addTarget(self, action: #selector(removeQueue), for: .touchUpInside)
         button.titleLabel?.font =  .systemFont(ofSize: 36.0, weight: .bold)
     }
     
@@ -194,6 +204,12 @@ class ViewController: UIViewController {
         //TODO: Run on background thread
         session?.startRunning()
         
+    }
+    
+    @objc private func removeQueue(){
+        sendQueue = []
+        sendQueueNames = ""
+        self.label.text = sendQueueNames
     }
     
     //gets number of entries in the database
@@ -288,7 +304,6 @@ class ViewController: UIViewController {
         guard let cgImage = image?.cgImage else {
             print("No image found")
             return}
-        
         //Handler
         let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
         
@@ -323,14 +338,21 @@ class ViewController: UIViewController {
                 
                 //error handling if no text is found
                 if index == -1{
-                    self?.label.text = "No Valid name found"
+                    //self?.label.text = "No Valid name found"
                     return
                 }
                 //TODO: Show lastname, firstname, and email
-                self?.label.text = String((self?.students.firstname1[index])!)
+                //self?.label.text = String(((self?.students.firstname1[index])!))
+                
+                if(!(self?.sendQueue.contains(index))!){
+                    self?.sendQueue.append(index)
+                    self?.sendQueueNames += (self?.students.firstname1[index])! + " "
+                    self?.label.text = self?.sendQueueNames
+                    AudioServicesPlayAlertSoundWithCompletion(SystemSoundID(kSystemSoundID_Vibrate)) { }
+                }
                 
                 //Sending email with valid items
-                self?.showMailComposer(index: index)
+                //self?.showMailComposer(index: index)
             }
         }
         
@@ -344,18 +366,32 @@ class ViewController: UIViewController {
         }
     }
     
+    @objc private func sendEmail(){
+        showMailComposer(index: sendQueue)
+    }
     
     //all below is for email composition
-    @objc func showMailComposer(index: Int) {
+    @objc func showMailComposer(index: [Int]) {
         guard MFMailComposeViewController.canSendMail() else {
             return
         }
+        
+        if index.isEmpty{
+            return
+        }
+        
         let composer = MFMailComposeViewController()
         composer.mailComposeDelegate = self
-        composer.setToRecipients([students.email[index]])
+        
+        var k : [String] = []
+        for i in index{
+            k.append(students.email[i])
+        }
+        
+        composer.setToRecipients(k)
         composer.setSubject("You've got a package")
         //TODO: Capitalize first letter
-        composer.setMessageBody("Hello " + students.firstname1[index] + " " + students.lastname[index] + ",\n\n" + "You have a new package ready at the package area. Please pick it up", isHTML: false)
+        composer.setMessageBody("Hello, You have a new package ready at the package area. Please pick it up", isHTML: false)
         present(composer, animated: true)
     }
 }
@@ -394,19 +430,21 @@ extension ViewController: AVCapturePhotoCaptureDelegate{
         }
         
         //Changing UI a bit
+        
         let image = UIImage(data: data)
+        /*
         imageView.image = image
         mode = 1
         imageView.isHidden = false
         button.isHidden = false
         previewLayer.isHidden = true
         shutterButton.isHidden = true
-        
+        */
         //Feeding to text recognition
         self.recognizeText(image: image)
         
         //Stopping camera
-        session?.stopRunning()
+        //session?.stopRunning()
         
     }
 }

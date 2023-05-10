@@ -9,7 +9,7 @@ import UIKit
 
 
 import Firebase
-
+import FirebaseAppCheck
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -19,6 +19,8 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions:
                        [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        let providerFactory = MyAppCheckProviderFactory()
+        AppCheck.setAppCheckProviderFactory(providerFactory)
         FirebaseApp.configure()
 
         return true
@@ -41,4 +43,5 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 
 
 }
+
 
