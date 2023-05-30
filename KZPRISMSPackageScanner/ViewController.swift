@@ -26,12 +26,25 @@ class ViewController: UIViewController {
     private var sendQueue : [Int] = []
     private var sendQueueNames = ""
     
-    private let shutterButton: UIButton = {
-        let shutterButton = UIButton(frame: CGRect(x: 0, y:0, width: 80, height: 80))
-        shutterButton.layer.cornerRadius = 40
-        shutterButton.layer.borderWidth = 10
-        shutterButton.layer.borderColor = UIColor.white.cgColor
-        return shutterButton
+    private let cameraButton: UIButton = {
+        let cameraButton = UIButton(frame: CGRect(x: 0, y:0, width: 40, height: 40))
+        cameraButton.setImage(UIImage(systemName: "camera.viewfinder"), for: .normal)
+        cameraButton.imageView?.contentMode = .scaleAspectFit;
+        return cameraButton
+    }()
+    
+    private let sendButton: UIButton = {
+        let sendButton = UIButton(frame: CGRect(x: 0, y:0, width: 40, height: 40))
+        sendButton.setImage(UIImage(systemName: "paperplane"), for: .normal)
+        sendButton.imageView?.contentMode = .scaleAspectFit;
+        return sendButton
+    }()
+    
+    private let removeButton: UIButton = {
+        let sendButton = UIButton(frame: CGRect(x: 0, y:0, width: 80, height: 80))
+        sendButton.setImage(UIImage(systemName: "delete.left"), for: .normal)
+        sendButton.imageView?.contentMode = .scaleAspectFit;
+        return sendButton
     }()
     
     //test label
@@ -51,12 +64,12 @@ class ViewController: UIViewController {
         return imageView
     }()
     
-    //Back button
-    private let button: UIButton = {
-        let button = UIButton()
-        button.setTitle("<", for: .normal)
-        button.setTitleColor(.blue, for: .normal)
-        return button
+    //Back removeAllButton
+    private let removeAllButton: UIButton = {
+        let removeAllButton = UIButton(frame: CGRect(x: 0, y:0, width: 40, height: 40))
+        //removeAllButton.setTitle("<", for: .normal)
+        removeAllButton.setImage(UIImage(systemName: "trash"), for: .normal)
+        return removeAllButton
     }()
     
     //stores all student info pulled from google firebase real time database
@@ -78,58 +91,54 @@ class ViewController: UIViewController {
         view.addSubview(label)
         view.addSubview(imageView)
         view.layer.addSublayer(previewLayer)
-        view.addSubview(shutterButton)
-        view.addSubview(button)
+        view.addSubview(cameraButton)
+        view.addSubview(removeAllButton)
+        view.addSubview(removeButton)
+        view.addSubview(sendButton)
         
         imageView.isHidden = true
-        //button.isHidden = true
-        
         checkCameraPermissions()
         
         getDatabaseCount{result in
             //wait for database to load and get number of entries which are then used to get all data from database
             self.getDatabaseData(num: result)
         }
-        
-        
-        self.timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true, block: { _ in
-            self.takePhoto()
+        self.timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true, block: { _ in
+            if self.mode == 0{
+                self.takePhoto()
+            }
         })
-        
-        /*DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { // Change `2.0` to the desired number of seconds.
-         
-         self.recognizeText(image: self.imageView.image)
-         }*/
     }
     
     //configuring various UI features
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         previewLayer.frame = CGRect(
-            x: 20,
-            y: view.safeAreaInsets.top,
-            width: view.frame.size.width - 40,
-            height: view.frame.size.width + 80)
+            x: 0,
+            y: 80 + view.safeAreaInsets.top,
+            width: view.frame.size.width,
+            height: view.frame.size.width + 120)
         imageView.frame = CGRect(
-            x: 20,
-            y: view.safeAreaInsets.top,
-            width: view.frame.size.width - 40,
-            height: view.frame.size.width + 80)
+            x: 0,
+            y: 80 + view.safeAreaInsets.top,
+            width: view.frame.size.width,
+            height: view.frame.size.width + 120)
         label.frame = CGRect(
             x: 20,
-            y:  view.frame.size.width + 60 + view.safeAreaInsets.top,
+            y:  view.safeAreaInsets.top,
             width: view.frame.size.width - 40,
-            height: 200)
-        button.frame = CGRect(
-            x: 20,
-            y: view.frame.size.height - 100,
-            width: 40,
-            height: 40)
-        shutterButton.center = CGPoint(x: view.frame.size.width/2, y: view.frame.size.height - 80)
-        shutterButton.addTarget(self, action: #selector(sendEmail), for: .touchUpInside)
-        //button.addTarget(self, action: #selector(restartCamera), for: .touchUpInside)
-        button.addTarget(self, action: #selector(removeQueue), for: .touchUpInside)
-        button.titleLabel?.font =  .systemFont(ofSize: 36.0, weight: .bold)
+            height: 50)
+        cameraButton.center = CGPoint(x: 20, y: view.frame.size.height - 80)
+        cameraButton.addTarget(self, action: #selector(restartCamera), for: .touchUpInside)
+        
+        sendButton.center = CGPoint(x: view.frame.size.width/2, y: view.frame.size.height - 80)
+        sendButton.addTarget(self, action: #selector(sendEmail), for: .touchUpInside)
+        
+        removeButton.center = CGPoint(x: view.frame.size.width - 80, y: view.frame.size.height - 80)
+        removeButton.addTarget(self, action: #selector(removeLastQueue), for: .touchUpInside)
+        
+        removeAllButton.center = CGPoint(x: view.frame.size.width - 20, y: view.frame.size.height - 80)
+        removeAllButton.addTarget(self, action: #selector(removeQueue), for: .touchUpInside)
     }
     
     //Checks for camera permissions, boilerplate code
@@ -192,19 +201,21 @@ class ViewController: UIViewController {
     
     //Restarts camera after taking photo, deprecated
     @objc private func restartCamera(){
-        if mode != 1{
-            return
+        if mode == 1{
+            
+            DispatchQueue.global(qos: .background).async {
+                self.session?.startRunning()
+            }
+            mode = 0
+        }
+        else{
+            mode = 1
+            
+            DispatchQueue.global(qos: .background).async {
+                self.session?.stopRunning()
+            }
         }
         //Changing some UI elements
-        self.label.text = "Waiting..."
-        mode = 0
-        imageView.isHidden = true
-        button.isHidden = true
-        previewLayer.isHidden = false
-        shutterButton.isHidden = false
-        DispatchQueue.global(qos: .background).async {
-            self.session?.startRunning()
-        }
         
     }
     
@@ -212,6 +223,18 @@ class ViewController: UIViewController {
     @objc private func removeQueue(){
         sendQueue = []
         sendQueueNames = ""
+        self.label.text = sendQueueNames
+    }
+    
+    @objc private func removeLastQueue(){
+        if(sendQueue.count == 0){
+            return
+        }
+        sendQueue.removeLast()
+        sendQueueNames = ""
+        for i in 0..<sendQueue.count{
+            sendQueueNames += self.students.firstname1[sendQueue[i]] + " "
+        }
         self.label.text = sendQueueNames
     }
     
@@ -341,11 +364,9 @@ class ViewController: UIViewController {
                 
                 //error handling if no text is found
                 if index == -1{
-                    //self?.label.text = "No Valid name found"
                     return
                 }
                 
-                //self?.label.text = String(((self?.students.firstname1[index])!))
                 
                 //checks if name is already in queue, if not, adds to queue and vibrates
                 if(!(self?.sendQueue.contains(index))!){
@@ -354,9 +375,6 @@ class ViewController: UIViewController {
                     self?.label.text = self?.sendQueueNames
                     AudioServicesPlayAlertSoundWithCompletion(SystemSoundID(kSystemSoundID_Vibrate)) { }
                 }
-                
-                //Sending email with valid items
-                //self?.showMailComposer(index: index)
             }
         }
         
@@ -426,6 +444,7 @@ extension ViewController: MFMailComposeViewControllerDelegate {
 //Takes photo, displays it, stops camera feed, and feeds photo to text detection algorithm
 extension ViewController: AVCapturePhotoCaptureDelegate{
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        AudioServicesDisposeSystemSoundID(1108)
         if mode != 0{
             return
         }
@@ -436,19 +455,14 @@ extension ViewController: AVCapturePhotoCaptureDelegate{
         //Changing UI a bit
         
         let image = UIImage(data: data)
-        /*
-        imageView.image = image
-        mode = 1
-        imageView.isHidden = false
-        button.isHidden = false
-        previewLayer.isHidden = true
-        shutterButton.isHidden = true
-        */
         //Feeding to text recognition
         self.recognizeText(image: image)
         
         //Stopping camera
-        //session?.stopRunning()
         
+    }
+    
+    func photoOutput(_ output: AVCapturePhotoOutput, willCapturePhotoFor resolvedSettings: AVCaptureResolvedPhotoSettings) {
+        AudioServicesDisposeSystemSoundID(1108)
     }
 }
