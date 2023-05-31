@@ -248,6 +248,7 @@ class ViewController: UIViewController {
     
     //moves data from online database to local struct, also flags when complete
     private func getDatabaseData(num: Int){
+        
         for i in 0..<num{
             //iterating through each entry
             database.child(String(i)).observeSingleEvent(of: .value, with: {snapshot in
@@ -277,6 +278,9 @@ class ViewController: UIViewController {
                 self.students.firstname1.append(String(splitInfo[2]))
                 self.students.num += 1
                 
+
+
+                
                 //marking completion
                 if(self.students.num == num){
                     self.students.complete = true
@@ -286,10 +290,12 @@ class ViewController: UIViewController {
     }
     
     //processing detected text to find if there is a combination of lastname + firstname/nickname, which is then associated with an email
-    private func getEmail(arr: [String]) -> Int{
+    private func getEmail(arr: [String]) -> [Int]{
         //only functions if all data is in local struct
+        
         if(students.complete){
             //TODO: error correction in finding algorithim, eg i to j, etc
+        
             
             //first checks if last name is in detected words
             var ln: [Int]  = []
@@ -315,13 +321,13 @@ class ViewController: UIViewController {
                 //currently just returns first found full name, perhaps future implementation could choose?
                 //TODO: choose full name?
                 if(fn != []){
-                    return fn[0]
+                    return fn
                 }
             }
             //returns -1 if no full name
-            return -1
+            return []
         }else{
-            return -1
+            return []
         }
     }
     
@@ -357,23 +363,29 @@ class ViewController: UIViewController {
             
             //call getEmail to get email
             let finaltext = self?.getEmail(arr: processedArr)
+            //self?.label.text = String(processedArr.joined(separator: " "))
+            
             
             DispatchQueue.main.async{
                 //display result
                 let index = finaltext!
                 
                 //error handling if no text is found
-                if index == -1{
+                if index == []{
                     return
                 }
                 
                 
                 //checks if name is already in queue, if not, adds to queue and vibrates
-                if(!(self?.sendQueue.contains(index))!){
-                    self?.sendQueue.append(index)
-                    self?.sendQueueNames += (self?.students.firstname1[index])! + " "
-                    self?.label.text = self?.sendQueueNames
-                    AudioServicesPlayAlertSoundWithCompletion(SystemSoundID(kSystemSoundID_Vibrate)) { }
+                
+                for i in 0..<index.count{
+                    if(!(self?.sendQueue.contains(index[i]))!){
+                        self?.sendQueue.append(index[i])
+                        self?.sendQueueNames += (self?.students.firstname1[index[i]])! + " "
+                        self?.label.text = self?.sendQueueNames
+                        AudioServicesPlayAlertSoundWithCompletion(SystemSoundID(kSystemSoundID_Vibrate)) { }
+                        break
+                    }
                 }
             }
         }
